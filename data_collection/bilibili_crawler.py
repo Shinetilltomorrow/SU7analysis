@@ -1,12 +1,13 @@
 # data_collection/bilibili_crawler.py
 # B站弹幕数据爬虫
 
+import asyncio
 import csv
 import pandas
 import os
-import time
+import random
 from datetime import datetime
-from bilibili_api import video, sync, search
+from bilibili_api import video, search
 import config
 import random
 
@@ -25,51 +26,65 @@ class BilibiliCrawler:
         self.end_date = end_date
         self.all_danmaku = []
 
-    async def search_videos(self, keyword):
-        """搜索相关视频"""
+    async def search_videos(self, keyword, max_pages=10, max_videos=100):
+        """
+        搜索相关视频
+        :param keyword: 搜索关键词
+        :param max_pages: 最大翻页数（防止无限循环）
+        :param max_videos: 最大获取视频数
+        """
+        print("=" * 50)
         print(f"正在搜索关键词: {keyword}")
-        result = []
+        print("=" * 50+ "\n")
+        all_videos = []
+        page = 1
+        total_fetched = 0
 
-        resp = sync(search.search_by_type(
-            keyword=keyword,
-            search_type=search.SearchObjectType.VIDEO   #指定搜索视频类型
-        ))
+        while page <= max_pages and total_fetched < max_videos:
+            resp = await search.search_by_type(
+                keyword=keyword,
+                search_type=search.SearchObjectType.VIDEO,
+                page=page
+            )
+
+            items = resp.get('result', [])
+            if not items:
+                break  # 没有更多结果
+
+            for item in items:
+                bvid = item.get('bvid')
+                title = item.get('title')
+                pubdate = datetime.fromtimestamp(item.get('pubdate', 0)).strftime('%Y-%m-%d')
+                author = item.get('author')
+                view = item.get('play', 0)
+                like = item.get('like', 0)
+                danmaku = item.get('danmaku', 0)
+
+                video_info = {
+                    'bv_id': bvid,
+                    'title': title,
+                    'pubdate': pubdate,
+                    'author': author,
+                    'view': view,
+                    'like': like,
+                    'danmaku': danmaku
+                }
+                all_videos.append(video_info)
+
+            total_fetched += len(items)
+            page += 1
+            # 避免请求过快，适当延时
+            await asyncio.sleep(random.randint(1, 3))
+
+        print(f"关键词 '{keyword}' 共获取 {len(all_videos)} 个视频")
+        return all_videos
 
 
-        # # 调试：打印第一条结果的结构（可选）
-        # if resp.get('result') and len(resp['result']) > 0:
-        #     print("搜索结果示例：", resp['result'][0])
-
-        for item in resp.get('result', []):
-            # 提取字段
-            bvid = item.get('bvid')
-            title = item.get('title')
-            # 发布时间为时间戳（秒），转为日期字符串
-            pubdate = datetime.fromtimestamp(item.get('pubdate', 0)).strftime('%Y-%m-%d')
-            author = item.get('author')
-            # 播放量、点赞数、弹幕数在顶层直接存在（从示例看）
-            view = item.get('play', 0)          # 播放量字段为 'play'
-            like = item.get('like', 0)          # 点赞数
-            danmaku = item.get('danmaku', 0)    # 弹幕数（注意字段名小写）
-
-            video_info = {
-                'bv_id': bvid,
-                'title': title,
-                'pubdate': pubdate,
-                'author': author,
-                'view': view,
-                'like': like,
-                'danmaku': danmaku
-            }
-            result.append(video_info)
-        return result
-
-    def get_danmu(self, bv_id):
+    async def get_danmu(self, bv_id):
         """获取单个视频的弹幕"""
         try:
             v = video.Video(bvid=bv_id)
-            # 获取弹幕列表（参数 0 表示第一页，实际可能有多页，此处简化）
-            danmu_list = sync(v.get_danmus(0))  # 正确方法名
+            danmu_list = await v.get_danmakus()
 
             danmu_data = []
             for d in danmu_list:
@@ -88,7 +103,7 @@ class BilibiliCrawler:
                     date_str = ''
                 # 弹幕类型
                 dm_type = getattr(d, 'danmu_type', getattr(d, 'type', None))
-
+                # 添加弹幕数据
                 danmu_data.append({
                     'bv_id': bv_id,
                     'text': text,
@@ -103,39 +118,44 @@ class BilibiliCrawler:
 
     async def crawl(self):
         """执行爬虫"""
+
         # 遍历关键词
         for keyword in self.keywords:
             # 关键词查找
             videos = await self.search_videos(keyword)
             # 存储视频元数据
-            config.save_data(videos,result_type="videos",result_count=len(videos))
+            config.save_data(videos,keyword=keyword,result_type="videos",add_some=f"{keyword}")
+            print("视频元数据已收集，正在开始获取视频弹幕数据\n")
+            print("-" * 50)
             for video_info in videos:
                 # 筛选时间范围
                 if video_info['pubdate'] < self.start_date or video_info['pubdate'] > self.end_date:
                     continue
-                # 筛选非广告
-                elif video_info['bv_id'] == 0:
+                if video_info['bv_id'] == 0:
                     continue
-                print(f"正在处理视频: {video_info['title']}\n")
+                print(f"正在处理视频: {video_info['title']}")
                 # 获取弹幕
-                danmus = self.get_danmu(video_info['bv_id'])
+                danmus = await self.get_danmu(video_info['bv_id'])
                 for d in danmus:
-                    d.update(video_info)  # 合并视频元数据
+                    d.update(video_info)
                     self.all_danmaku.append(d)
+                # 随机时停
+                await asyncio.sleep(random.randint(1, 3))
+            print("-" * 50)
+            print("弹幕数据处理完毕")
+            print("-" * 50)
+                # 保存数据
+            config.save_data(self.all_danmaku,keyword=keyword, result_type="danmaku",add_some=f"{keyword}")
 
-                # 避免请求过快
-                time.sleep(random.randint(1, 3))
-            # 保存数据
-            config.save_data(videos,result_type="videos",result_count=len(self.all_danmaku))
 
-
-
-
-# 使用示例
-if __name__ == "__main__":
+# 测试函数
+async def main():
     crawler = BilibiliCrawler(
         keywords=config.KEYWORDS,
         start_date=config.START_DATE,
         end_date=config.END_DATE
     )
-    crawler.crawl()
+    await crawler.crawl()
+
+if __name__ == "__main__":
+    asyncio.run(main())

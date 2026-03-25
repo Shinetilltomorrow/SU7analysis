@@ -21,12 +21,18 @@ N_TOP_WORDS = 10           # 每个主题展示的关键词数量
 # --- 路径配置 ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-RAW_VIDEO_PATH = os.path.join(BASE_DIR, "data", "raw", "videos.csv")
+RAW_VIDEOS_PATH = os.path.join(BASE_DIR, "data", "raw", "videos.csv")
 RAW_DANMAKU_PATH = os.path.join(BASE_DIR, "data", "raw", "danmaku.csv")
 PROCESSED_DATA_PATH = os.path.join(BASE_DIR, "data", "processed", "cleaned_comments.csv")
 SALES_DATA_PATH = os.path.join(BASE_DIR, "data", "sales", "xiaomi_su7_sales.csv")
 RESULTS_PATH = os.path.join(BASE_DIR, "results")
 
+
+def _add_some_(add: str, filepath: str):
+    dirname, filename = os.path.split(filepath)
+    name, ext = os.path.splitext(filename)
+    new_filename = f"{name}_{add}{ext}"
+    return os.path.join(dirname, new_filename)
 
 
 def _add_timestamp_to_filename(filepath):
@@ -37,47 +43,73 @@ def _add_timestamp_to_filename(filepath):
     new_filename = f"{name}_{timestamp}{ext}"
     return os.path.join(dirname, new_filename)
 
-def save_data(data, result_type, filename=None, add_timestamp=True, **kwargs):
+
+def save_data(data,
+              result_type: str,
+              add_some: str,
+              filename: str = None,
+              add_timestamp: bool = True,
+              keyword = None,
+              **kwargs) -> None:
     """
     根据结果类型保存数据到对应路径，自动添加时间戳。
 
     参数:
-        data: 要保存的数据 (DataFrame, str 等)
-        result_type: 结果类型，支持 'video', 'danmaku', 'processed', 'sales', 'result'
+        data: 要保存的数据 (DataFrame, str, 或列表)
+        result_type: 结果类型，支持 'videos', 'danmaku', 'processed', 'sales', 'result'
+        add_some: 文件名添加细分
         filename: 当 result_type 为 'result' 时，必须提供文件名；其他类型忽略此参数
         add_timestamp: 是否在文件名中添加时间戳 (默认 True)
+        keyword: 关键词，用于在 data/raw 下创建子文件夹（仅对 'videos' 和 'danmaku' 有效）
         **kwargs: 传递给具体保存方法的额外参数 (如 index=False 等)
     """
-    path_map = {
-        "video": RAW_VIDEO_PATH,
-        "danmaku": RAW_DANMAKU_PATH,
-        "processed": PROCESSED_DATA_PATH,
-        "sales": SALES_DATA_PATH,
-        "result": RESULTS_PATH,
-    }
-
-    if result_type not in path_map:
-        raise ValueError(f"不支持的结果类型: {result_type}")
-
-    base_path = path_map[result_type]
+    # 如果 data 是列表，先转为 DataFrame
+    if isinstance(data, list):
+        if not data:
+            print("警告：数据为空，跳过保存")
+            return
+        data = pd.DataFrame(data)
 
     # 确定最终保存路径
-    if result_type == "result":
+    if result_type == "videos":
+        if keyword is not None:
+            # 使用关键词子目录：data/raw/{keyword}/videos.csv
+            base_dir = os.path.join(BASE_DIR, "data", "raw", keyword)
+            # 先判断 keyword 文件夹是否存在，不存在则创建
+            os.makedirs(base_dir, exist_ok=True)
+            full_path = os.path.join(base_dir, "videos.csv")
+        else:
+            full_path = RAW_VIDEOS_PATH
+    elif result_type == "danmaku":
+        if keyword is not None:
+            base_dir = os.path.join(BASE_DIR, "data", "raw", keyword)
+            os.makedirs(base_dir, exist_ok=True)
+            full_path = os.path.join(base_dir, "danmaku.csv")
+        else:
+            full_path = RAW_DANMAKU_PATH
+    elif result_type == "processed":
+        full_path = PROCESSED_DATA_PATH
+    elif result_type == "sales":
+        full_path = SALES_DATA_PATH
+    elif result_type == "result":
         if not filename:
             raise ValueError("result_type 为 'result' 时必须提供 filename 参数")
-        # 确保结果目录存在
-        os.makedirs(base_path, exist_ok=True)
-        full_path = os.path.join(base_path, filename)
+        full_path = os.path.join(RESULTS_PATH, filename)
     else:
-        full_path = base_path
-        # 确保文件的父目录存在
-        os.makedirs(os.path.dirname(full_path), exist_ok=True)
+        raise ValueError(f"不支持的结果类型: {result_type}")
+
+    # 确保父目录存在（对其他类型也做保障）
+    os.makedirs(os.path.dirname(full_path), exist_ok=True)
+
+    # 如果需要添加细分标识，则修改文件名
+    if add_some is not None:
+        full_path = _add_some_(add_some, full_path)
 
     # 如果需要添加时间戳，则修改文件名
     if add_timestamp:
         full_path = _add_timestamp_to_filename(full_path)
 
-        # 保存数据
+    # 保存数据
     if isinstance(data, pd.DataFrame):
         data.to_csv(full_path, **kwargs)
     elif isinstance(data, str):
@@ -86,6 +118,6 @@ def save_data(data, result_type, filename=None, add_timestamp=True, **kwargs):
     else:
         raise TypeError(f"不支持的数据类型: {type(data)}")
 
-        # 打印保存信息（包含类型和相对路径）
+    # 打印保存信息（包含类型和相对路径）
     relative_path = os.path.relpath(full_path, BASE_DIR)
     print(f"{result_type}数据已保存至：{relative_path}")
