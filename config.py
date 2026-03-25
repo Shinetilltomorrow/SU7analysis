@@ -21,10 +21,20 @@ N_TOP_WORDS = 10           # 每个主题展示的关键词数量
 # --- 路径配置 ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+# 原始数据
 RAW_VIDEOS_PATH = os.path.join(BASE_DIR, "data", "raw", "videos.csv")
 RAW_DANMAKU_PATH = os.path.join(BASE_DIR, "data", "raw", "danmaku.csv")
-PROCESSED_DATA_PATH = os.path.join(BASE_DIR, "data", "processed", "cleaned_comments.csv")
+
+# 处理后数据
+PROCESSED_VIDEOS_PATH = os.path.join(BASE_DIR, "data", "processed", "videos", "cleaned_videos.csv")
+SEGMENTED_VIDEOS_PATH = os.path.join(BASE_DIR, "data", "processed", "videos", "segmented_videos.csv")
+CLEANED_COMMENTS_PATH = os.path.join(BASE_DIR, "data", "processed", "cleaned_comments.csv")
+SEGMENTED_COMMENTS_PATH = os.path.join(BASE_DIR, "data", "processed", "segmented_comments.csv")   # 新增分词后的弹幕路径
+
+# 销量数据
 SALES_DATA_PATH = os.path.join(BASE_DIR, "data", "sales", "xiaomi_su7_sales.csv")
+
+# 结果目录
 RESULTS_PATH = os.path.join(BASE_DIR, "results")
 
 
@@ -46,10 +56,10 @@ def _add_timestamp_to_filename(filepath):
 
 def save_data(data,
               result_type: str,
-              add_some: str,
+              add_some: str = None,
               filename: str = None,
               add_timestamp: bool = True,
-              keyword = None,
+              keyword=None,
               **kwargs) -> None:
     """
     根据结果类型保存数据到对应路径，自动添加时间戳。
@@ -75,7 +85,6 @@ def save_data(data,
         if keyword is not None:
             # 使用关键词子目录：data/raw/{keyword}/videos.csv
             base_dir = os.path.join(BASE_DIR, "data", "raw", keyword)
-            # 先判断 keyword 文件夹是否存在，不存在则创建
             os.makedirs(base_dir, exist_ok=True)
             full_path = os.path.join(base_dir, "videos.csv")
         else:
@@ -88,7 +97,7 @@ def save_data(data,
         else:
             full_path = RAW_DANMAKU_PATH
     elif result_type == "processed":
-        full_path = PROCESSED_DATA_PATH
+        full_path = CLEANED_COMMENTS_PATH   # 这里仅指清洗后的弹幕，可根据需要调整
     elif result_type == "sales":
         full_path = SALES_DATA_PATH
     elif result_type == "result":
@@ -98,7 +107,7 @@ def save_data(data,
     else:
         raise ValueError(f"不支持的结果类型: {result_type}")
 
-    # 确保父目录存在（对其他类型也做保障）
+    # 确保父目录存在
     os.makedirs(os.path.dirname(full_path), exist_ok=True)
 
     # 如果需要添加细分标识，则修改文件名
