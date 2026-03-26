@@ -26,6 +26,9 @@ class LDATopicModeler:
     def load_data(self):
         """加载数据"""
         self.df = pd.read_csv(self.data_path, encoding='utf-8-sig')
+        # 确保 segmented 列是字符串，将 NaN 填充为空字符串
+        if 'segmented' in self.df.columns:
+            self.df['segmented'] = self.df['segmented'].fillna('').astype(str)
         print(f"加载数据: {len(self.df)} 条")
 
     def prepare_corpus(self):

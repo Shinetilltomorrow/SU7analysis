@@ -14,10 +14,18 @@ plt.rcParams['axes.unicode_minus'] = False
 
 def plot_sentiment_timeline(df, save_path=None):
     """绘制情感得分时序图"""
+    # 确保日期列存在并转换为datetime
+    if 'date' not in df.columns:
+        print("警告：数据中缺少 date 列，无法绘制情感时序图")
+        return
+    if not pd.api.types.is_datetime64_any_dtype(df['date']):
+        df['date'] = pd.to_datetime(df['date'])
+
     fig, ax = plt.subplots(figsize=(12, 6))
 
-    # 计算每日平均情感得分
+    # 按天聚合
     daily_sentiment = df.groupby(df['date'].dt.date)['sentiment_score'].mean().reset_index()
+    daily_sentiment.columns = ['date', 'sentiment_score']
 
     ax.plot(daily_sentiment['date'], daily_sentiment['sentiment_score'],
             color='steelblue', linewidth=1.5, label='平均情感得分')
@@ -43,6 +51,9 @@ def plot_sentiment_timeline(df, save_path=None):
 
 def plot_sentiment_distribution(df, save_path=None):
     """绘制情感分布饼图"""
+    if 'sentiment_label' not in df.columns:
+        print("警告：数据中缺少 sentiment_label 列，无法绘制情感分布图")
+        return
     sentiment_counts = df['sentiment_label'].value_counts()
 
     colors = ['green', 'gray', 'red']
@@ -68,6 +79,18 @@ def plot_sentiment_distribution(df, save_path=None):
 
 def plot_topic_trend(topic_trend_df, save_path=None):
     """绘制主题演化趋势图"""
+    if topic_trend_df is None or topic_trend_df.empty:
+        print("警告：主题趋势数据为空，无法绘图")
+        return
+    # 确保索引是日期类型（假设索引为日期）
+    if not pd.api.types.is_datetime64_any_dtype(topic_trend_df.index):
+        # 尝试转换为日期
+        try:
+            topic_trend_df.index = pd.to_datetime(topic_trend_df.index)
+        except Exception as e:
+            print(f"无法将索引转换为日期: {e}")
+            return
+
     fig, ax = plt.subplots(figsize=(12, 6))
 
     # 绘制堆叠面积图
@@ -87,6 +110,16 @@ def plot_topic_trend(topic_trend_df, save_path=None):
 
 def plot_sentiment_vs_sales(merged_df, save_path=None):
     """绘制情感与销量对比图"""
+    if merged_df is None or merged_df.empty:
+        print("警告：合并数据为空，无法绘制对比图")
+        return
+    # 确保 month 列存在并转换为日期
+    if 'month' not in merged_df.columns:
+        print("警告：数据中缺少 month 列，无法绘制对比图")
+        return
+    if not pd.api.types.is_datetime64_any_dtype(merged_df['month']):
+        merged_df['month'] = pd.to_datetime(merged_df['month'])
+
     fig, ax1 = plt.subplots(figsize=(12, 6))
 
     # 左轴：销量
@@ -125,7 +158,10 @@ def plot_wordcloud(text_series, save_path=None):
     try:
         from wordcloud import WordCloud
 
+        # 确保 text_series 是字符串，并处理缺失值
+        text_series = text_series.fillna('').astype(str)
         text = ' '.join(text_series)
+
         wordcloud = WordCloud(
             width=800,
             height=400,

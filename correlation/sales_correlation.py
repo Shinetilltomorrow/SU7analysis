@@ -24,10 +24,16 @@ class SalesCorrelationAnalyzer:
         """加载情感数据和销量数据"""
         # 加载情感分析结果
         self.sentiment_df = pd.read_csv(self.sentiment_path, encoding='utf-8-sig')
+        print(f"情感数据列: {self.sentiment_df.columns.tolist()}")  # 调试
 
-        # 加载销量数据（需要提前准备CSV文件）
+        # 加载销量数据，根据实际列名调整
         self.sales_df = pd.read_csv(self.sales_path, encoding='utf-8-sig')
-        self.sales_df['month'] = pd.to_datetime(self.sales_df['month'])
+        # 将 '时间' 列转换为 datetime，并重命名为 'month'
+        self.sales_df['month'] = pd.to_datetime(self.sales_df['时间'], format='%Y-%m')
+        # 重命名销量列
+        self.sales_df.rename(columns={'月销量(辆)': 'sales'}, inplace=True)
+        # 只保留需要的列，避免后续冲突
+        self.sales_df = self.sales_df[['month', 'sales']]
 
         print(f"情感数据: {len(self.sentiment_df)} 条")
         print(f"销量数据: {len(self.sales_df)} 个月")

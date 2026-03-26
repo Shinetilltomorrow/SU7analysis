@@ -10,9 +10,10 @@ import config
 class TextSegmenter:
     """文本分词类"""
 
-    def __init__(self, input_path, output_path):
+    def __init__(self, input_path, output_path, text_column='cleaned_text'):
         self.input_path = input_path
         self.output_path = output_path
+        self.text_column = text_column
         self.df = None
 
         # 自定义词典（汽车领域术语 + 网络流行语）
@@ -30,9 +31,9 @@ class TextSegmenter:
             '冲', '蹲', '劝退', '安利', '种草', '拔草'
         ]
 
-        # 加载自定义词典
+        # 加载自定义词典（修复 jieba 调用，提供频率参数）
         for word in self.custom_words:
-            jieba.add_word(word)
+            jieba.add_word(word, freq=10000)  # 增加频率，确保被识别
 
     def load_data(self):
         """加载清洗后的数据"""
@@ -41,15 +42,14 @@ class TextSegmenter:
 
     def segment(self):
         """进行分词"""
-
         def cut(text):
-            words = jieba.lcut(text)
+            words = jieba.cut(text)
             # 过滤停用词（这里简化，实际需要加载停用词表）
             stopwords = ['的', '了', '是', '在', '和', '也', '都', '就', '不', '啊', '哦', '嗯']
             words = [w for w in words if w not in stopwords and len(w) > 0]
             return ' '.join(words)
 
-        self.df['segmented'] = self.df['cleaned_text'].apply(cut)
+        self.df['segmented'] = self.df[self.text_column].apply(cut)
         print("分词完成")
 
     def save(self):
@@ -58,13 +58,14 @@ class TextSegmenter:
         print(f"分词结果保存到 {self.output_path}")
 
 
-# 使用示例
+# 使用示例（仅用于测试，不依赖 config）
 if __name__ == "__main__":
-    # 清洗
+    # 注意：需要先定义 DataCleaner 或直接导入
+    from data_preprocessing.clean import DataCleaner
     cleaner = DataCleaner(config.RAW_DATA_PATH, "data/processed/cleaned_comments.csv")
     cleaner.run()
 
-    # 分词
+    # 分词（弹幕使用 cleaned_text）
     segmenter = TextSegmenter("data/processed/cleaned_comments.csv", config.PROCESSED_DATA_PATH)
     segmenter.load_data()
     segmenter.segment()

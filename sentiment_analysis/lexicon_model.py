@@ -51,6 +51,8 @@ class LexiconSentimentAnalyzer:
 
     def calculate_score(self, text):
         """计算单条弹幕的情感得分"""
+        if not isinstance(text, str):
+            return 0.5
         words = text.split()
         score = 0
         i = 0
@@ -91,6 +93,8 @@ class LexiconSentimentAnalyzer:
     def analyze(self):
         """执行情感分析"""
         self.df = pd.read_csv(self.data_path, encoding='utf-8-sig')
+        # 确保 segmented 列是字符串，将 NaN 填充为空字符串
+        self.df['segmented'] = self.df['segmented'].fillna('').astype(str)
         self.df['sentiment_score'] = self.df['segmented'].apply(self.calculate_score)
 
         # 情感分类
