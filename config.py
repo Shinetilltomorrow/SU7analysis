@@ -146,3 +146,30 @@ class SaveData:
 
         relative_path = os.path.relpath(full_path, BASE_DIR)
         print(f"{self.result_type}数据已保存至：{relative_path}")
+
+# 新增：打印步骤辅助函数
+def print_step(step_name, is_start=True):
+    if is_start:
+        print(f"\n{'='*60}\n【{step_name}】开始\n{'='*60}")
+    else:
+        print(f"\n{'='*60}\n【{step_name}】完成\n{'='*60}\n")
+
+def print_table(df, title=None):
+    if title:
+        print(f"\n{title}")
+    print(df.to_string(index=False))
+
+def ensure_directories():
+    """确保所有需要的目录存在"""
+    dirs = [
+        os.path.dirname(SEGMENTED_VIDEOS_PATH),
+        os.path.dirname(SEGMENTED_COMMENTS_PATH),
+        RESULTS_PATH,
+        os.path.dirname(SALES_DATA_PATH),
+        RAW_DATA_DIR,
+        os.path.join(BASE_DIR, "data", "processed", "videos"),
+        os.path.join(BASE_DIR, "data", "processed", "danmaku"),
+    ]
+    for d in dirs:
+        if d:
+            os.makedirs(d, exist_ok=True)
