@@ -13,10 +13,12 @@ END_DATE = "2026-01-31"    # 采集结束时间
 # 情感分析配置
 POSITIVE_THRESHOLD = 0.6   # 积极情感阈值
 NEGATIVE_THRESHOLD = 0.4   # 消极情感阈值
+USE_BERT = False           # 是否使用BERT情感分析（需先训练或下载模型）
 
 # LDA主题模型配置
-N_TOPICS = 5               # 主题数量
+N_TOPICS = 5               # 主题数量（可设为None自动选择）
 N_TOP_WORDS = 10           # 每个主题展示的关键词数量
+AUTO_SELECT_TOPICS = True  # 是否自动选择最优主题数
 
 # --- 路径配置 ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -34,13 +36,22 @@ SALES_DATA_PATH = os.path.join(BASE_DIR, "data", "sales", "xiaomi_su7_sales.csv"
 # 结果目录
 RESULTS_PATH = os.path.join(BASE_DIR, "results")
 
-# 以下旧路径变量保留，以防其他代码引用（但新流程已不再使用）
+# 以下旧路径变量保留，以防其他代码引用
 CLEANED_COMMENTS_PATH = os.path.join(BASE_DIR, "data", "processed", "cleaned_comments.csv")
 PROCESSED_VIDEOS_PATH = os.path.join(BASE_DIR, "data", "processed", "videos", "cleaned_videos.csv")
 
+# 新增路径配置
+STOPWORDS_PATH = os.path.join(BASE_DIR, "data", "stopwords.txt")           # 停用词文件
+USER_DICT_PATH = os.path.join(BASE_DIR, "data", "user_dict.txt")           # 用户自定义词典
+POS_DICT_PATH = os.path.join(BASE_DIR, "data", "sentiment", "positive_words.txt")   # 积极词词典
+NEG_DICT_PATH = os.path.join(BASE_DIR, "data", "sentiment", "negative_words.txt")   # 消极词词典
+DEGREE_DICT_PATH = os.path.join(BASE_DIR, "data", "sentiment", "degree_words.txt")  # 程度副词词典
+NEGATION_DICT_PATH = os.path.join(BASE_DIR, "data", "sentiment", "negation_words.txt") # 否定词词典
+BERT_MODEL_PATH = os.path.join(BASE_DIR, "models", "bert-base-chinese")    # BERT模型路径
+
 
 class SaveData:
-    """保存数据的工具类"""
+    """保存数据的工具类（保持不变）"""
 
     def __init__(self, data, result_type, add_some=None, filename=None, add_timestamp=True, keyword=None):
         self.data = data
@@ -51,7 +62,6 @@ class SaveData:
         self.keyword = keyword
 
     def _add_some_(self, filepath: str):
-        """在文件名中插入细分标识"""
         add = self.add_some
         dirname, filename = os.path.split(filepath)
         name, ext = os.path.splitext(filename)
@@ -59,7 +69,6 @@ class SaveData:
         return os.path.join(dirname, new_filename)
 
     def _add_timestamp_to_filename(self, filepath):
-        """在文件名中插入时间戳"""
         dirname, filename = os.path.split(filepath)
         name, ext = os.path.splitext(filename)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -72,7 +81,6 @@ class SaveData:
         add_some = self.add_some
         add_timestamp = self.add_timestamp
 
-        # 构造文件名
         if result_type == "videos":
             base_name = f"videos_{keyword}" if keyword else "videos"
             parts = [base_name]
@@ -102,7 +110,7 @@ class SaveData:
             full_path = os.path.join(base_dir, filename)
 
         elif result_type == "processed":
-            full_path = CLEANED_COMMENTS_PATH   # 旧逻辑，保留
+            full_path = CLEANED_COMMENTS_PATH
 
         elif result_type == "sales":
             full_path = SALES_DATA_PATH

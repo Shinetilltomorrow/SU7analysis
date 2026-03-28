@@ -12,7 +12,6 @@ class BaseCleaner:
     """基础清洗类，提供通用方法"""
     def __init__(self, raw_path, output_path=None):
         self.raw_path = raw_path
-        # 如果没有指定输出路径，则使用默认路径
         if output_path is None:
             self.output_path = self._default_output_path()
         else:
@@ -20,14 +19,9 @@ class BaseCleaner:
         self.df = None
 
     def _default_output_path(self):
-        """生成默认输出路径：data/processed/{subdir}/原文件名.csv"""
-        # 获取当前清洗器对应的子目录（由子类定义）
         subdir = getattr(self, 'subdir', 'processed')
-        # 构建输出目录路径
         output_dir = os.path.join(config.BASE_DIR, 'data', 'processed', subdir)
-        # 确保输出目录存在
         os.makedirs(output_dir, exist_ok=True)
-        # 获取原文件名（不含目录）
         filename = os.path.basename(self.raw_path)
         return os.path.join(output_dir, filename)
 
@@ -52,10 +46,15 @@ class BaseCleaner:
         def clean_single(text):
             if pd.isna(text):
                 return ""
+            # 去除HTML标签
             text = re.sub(r'<[^>]+>', '', text)
+            # 去除URL
             text = re.sub(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+])+', '', text)
+            # 去除表情符号（保留中文、英文、数字、常用标点）
             text = re.sub(r'[^\u4e00-\u9fa5a-zA-Z0-9，。！？；：""''、]', '', text)
+            # 去除多余空白
             text = re.sub(r'\s+', '', text)
+            # 去除首尾空白
             return text.strip()
 
         self.df[new_column] = self.df[column].apply(clean_single)
@@ -67,8 +66,7 @@ class BaseCleaner:
 
 
 class VideoCleaner(BaseCleaner):
-    """视频数据清洗"""
-    subdir = 'videos'  # 指定子目录
+    subdir = 'videos'
 
     def run(self):
         print("检测到视频数据，开始清洗...")
@@ -80,14 +78,15 @@ class VideoCleaner(BaseCleaner):
             r'^.{0,2}$',
             r'广告',
             r'加微信',
+            r'宣传',
+            r'推广'
         ])
         self.clean_text(column='title', new_column='cleaned_title')
         self.save()
 
 
 class DanmakuCleaner(BaseCleaner):
-    """弹幕数据清洗"""
-    subdir = 'danmaku'  # 指定子目录
+    subdir = 'danmaku'
 
     def run(self):
         print("检测到弹幕数据，开始清洗...")
@@ -99,13 +98,15 @@ class DanmakuCleaner(BaseCleaner):
             r'^.{0,2}$',
             r'广告',
             r'加微信',
+            r'求赞',
+            r'关注',
+            r'三连'
         ])
         self.clean_text(column='text', new_column='cleaned_text')
         self.save()
 
 
 def detect_data_type(file_path):
-    """通过读取文件头判断数据类型"""
     df_sample = pd.read_csv(file_path, encoding='utf-8-sig', nrows=1)
     if 'text' in df_sample.columns:
         return 'danmaku'
@@ -114,14 +115,7 @@ def detect_data_type(file_path):
 
 
 def clean_data(file_path=None, output_path=None):
-    """统一入口：自动识别数据类型并清洗
-
-    参数:
-        file_path: 可选，要清洗的单个文件路径。若不指定，则从 config 中读取 RAW 路径，并清洗最新文件。
-        output_path: 可选，输出文件路径（仅当清洗单个文件时有效）。
-    """
     if file_path is None:
-        # 未指定文件时，自动清洗 config 中定义的两个 RAW 目录下的最新文件
         video_root = getattr(config, 'RAW_VIDEOS_PATH', '.') if config else '.'
         danmaku_root = getattr(config, 'RAW_DANMAKU_PATH', '.') if config else '.'
         auto_clean_latest(video_root=video_root, danmaku_root=danmaku_root, keyword=None)
@@ -139,7 +133,6 @@ def clean_data(file_path=None, output_path=None):
 
 
 def find_folders_by_keyword(root_path, keyword):
-    """递归查找所有包含关键词的文件夹路径（不区分大小写）"""
     matches = []
     if not os.path.exists(root_path):
         return matches
@@ -150,11 +143,7 @@ def find_folders_by_keyword(root_path, keyword):
 
 
 def get_latest_csv_by_type(folder_path, keyword=None):
-    """
-    递归扫描文件夹（包括所有子文件夹），返回最新视频文件和最新弹幕文件的路径（按修改时间）
-    """
     csv_files = []
-    # 递归遍历 folder_path 下所有 .csv 文件
     for root, dirs, files in os.walk(folder_path):
         for file in files:
             if file.endswith('.csv'):
@@ -179,9 +168,6 @@ def get_latest_csv_by_type(folder_path, keyword=None):
 
 
 def auto_clean_latest(video_root=None, danmaku_root=None, keyword=None):
-    """
-    自动清洗最新的视频和弹幕文件，分别从指定根目录（默认读取config）中查找
-    """
     if video_root is None:
         video_root = getattr(config, 'RAW_VIDEOS_PATH', '.') if config else '.'
     if danmaku_root is None:
