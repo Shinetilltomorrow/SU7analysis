@@ -1,5 +1,6 @@
 # topic_modeling/lda_model.py
 # LDA主题模型（增强版，支持自动选择主题数）
+import os
 
 import pandas as pd
 import numpy as np
@@ -124,7 +125,8 @@ class LDATopicModeler:
         return self.df, topics
 
     def save(self, output_path):
-        self.df.to_csv(output_path, index=False, encoding='utf-8-sig')
+        # 不再直接使用 output_path，而是交给 SaveData 处理
+        config.SaveData(self.df, result_type="result", filename=os.path.basename(output_path)).save()
         print(f"主题建模结果保存到 {output_path}")
 
 

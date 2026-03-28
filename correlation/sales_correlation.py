@@ -1,5 +1,6 @@
 # correlation/sales_correlation.py
 # 情感与销量的关联分析
+import os
 
 import pandas as pd
 import numpy as np
@@ -128,7 +129,8 @@ class SalesCorrelationAnalyzer:
         return self.merged_df, corr_results, lag_results
 
     def save(self, output_path):
-        self.merged_df.to_csv(output_path, index=False, encoding='utf-8-sig')
+        # 不再直接使用 output_path，而是交给 SaveData 处理
+        config.SaveData(self.df, result_type="result", filename=os.path.basename(output_path)).save()
         print(f"关联分析结果保存到 {output_path}")
 
 

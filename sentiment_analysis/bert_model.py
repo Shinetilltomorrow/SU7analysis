@@ -1,6 +1,6 @@
 # sentiment_analysis/bert_model.py
 # 基于BERT的情感分析（需要transformers库）
-
+import os
 import pandas as pd
 import torch
 import config
@@ -86,7 +86,8 @@ class BERTSentimentAnalyzer:
         return self.df
 
     def save(self, output_path):
-        self.df.to_csv(output_path, index=False, encoding='utf-8-sig')
+        # 不再直接使用 output_path，而是交给 SaveData 处理
+        config.SaveData(self.df, result_type="result", filename=os.path.basename(output_path)).save()
         print(f"BERT情感分析结果保存到 {output_path}")
 
 
