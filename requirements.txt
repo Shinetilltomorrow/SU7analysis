@@ -1,0 +1,11 @@
+bilibili-api-python
+pandas
+numpy
+scipy
+scikit-learn
+statsmodels
+matplotlib
+wordcloud
+jieba
+transformers
+torch
