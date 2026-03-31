@@ -40,7 +40,7 @@ class TextSegmenter:
                 jieba.add_word(word, freq=10000)
             config.logger.info("已加载内置用户词典")
 
-        self.keep_pos = {'n', 'v', 'a', 'an', 'vn', 'ad', 'i', 'l', 'j'}  # 名词、动词、形容词等
+        self.keep_pos = {'n', 'v', 'a', 'an', 'vn', 'ad', 'i', 'l', 'j'}
 
     def load_data(self):
         self.df = pd.read_csv(self.input_path, encoding='utf-8-sig')

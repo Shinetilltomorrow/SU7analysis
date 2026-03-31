@@ -13,12 +13,12 @@ END_DATE = "2026-01-31"
 # 情感分析配置
 POSITIVE_THRESHOLD = 0.6
 NEGATIVE_THRESHOLD = 0.4
-USE_BERT = True                     # 启用 BERT
-SENTIMENT_METHOD = 'bert'           # 使用 BERT 方法
-BERT_MODEL_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "models", "bert-base-chinese")
+USE_BERT = True
+SENTIMENT_METHOD = 'bert'
+BERT_MODEL_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "models", "bert-finetuned-3class")
 
 # LDA 主题模型配置
-N_TOPICS = None                     # 自动选择主题数
+N_TOPICS = None
 AUTO_SELECT_TOPICS = True
 N_TOP_WORDS = 10
 USE_POS_FILTER = True
@@ -29,13 +29,15 @@ LDA_MIN_DF = 3
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 RAW_DATA_DIR = os.path.join(BASE_DIR, "data", "raw")
-SEGMENTED_VIDEOS_PATH = os.path.join(BASE_DIR, "data", "processed", "segmented_videos.csv")
-SEGMENTED_COMMENTS_PATH = os.path.join(BASE_DIR, "data", "processed", "segmented_comments.csv")
+PROCESSED_DATA_DIR = os.path.join(BASE_DIR, "data", "processed")
+
+SEGMENTED_VIDEOS_PATH = os.path.join(PROCESSED_DATA_DIR, "segmented_videos.csv")
+SEGMENTED_COMMENTS_PATH = os.path.join(PROCESSED_DATA_DIR, "segmented_comments.csv")
 SALES_DATA_PATH = os.path.join(BASE_DIR, "data", "sales", "xiaomi_su7_sales.csv")
 RESULTS_PATH = os.path.join(BASE_DIR, "results")
 
-CLEANED_COMMENTS_PATH = os.path.join(BASE_DIR, "data", "processed", "cleaned_comments.csv")
-PROCESSED_VIDEOS_PATH = os.path.join(BASE_DIR, "data", "processed", "videos", "cleaned_videos.csv")
+COMBINED_VIDEOS_PATH = os.path.join(PROCESSED_DATA_DIR, "combined_cleaned_videos.csv")
+COMBINED_COMMENTS_PATH = os.path.join(PROCESSED_DATA_DIR, "combined_cleaned_comments.csv")
 
 STOPWORDS_PATH = os.path.join(BASE_DIR, "data", "stopwords.txt")
 USER_DICT_PATH = os.path.join(BASE_DIR, "data", "user_dict.txt")
@@ -73,24 +75,29 @@ def ensure_directories():
         RESULTS_PATH,
         os.path.dirname(SALES_DATA_PATH),
         RAW_DATA_DIR,
-        os.path.join(BASE_DIR, "data", "processed", "videos"),
-        os.path.join(BASE_DIR, "data", "processed", "danmaku"),
+        PROCESSED_DATA_DIR,
+        os.path.join(PROCESSED_DATA_DIR, "videos"),
+        os.path.join(PROCESSED_DATA_DIR, "danmaku"),
         os.path.dirname(STOPWORDS_PATH),
         os.path.dirname(USER_DICT_PATH),
         os.path.dirname(POS_DICT_PATH),
         os.path.dirname(BERT_MODEL_PATH),
     ]
+    for kw in KEYWORDS:
+        dirs.append(os.path.join(RAW_DATA_DIR, "videos", kw))
+        dirs.append(os.path.join(RAW_DATA_DIR, "danmaku", kw))
+        dirs.append(os.path.join(PROCESSED_DATA_DIR, "videos", kw))
+        dirs.append(os.path.join(PROCESSED_DATA_DIR, "danmaku", kw))
     for d in dirs:
         if d:
             os.makedirs(d, exist_ok=True)
 
 def create_default_dicts():
-    # 停用词表（已扩充）
+    # 停用词表（已扩充，去除英文停用词）
     if not os.path.exists(STOPWORDS_PATH):
         os.makedirs(os.path.dirname(STOPWORDS_PATH), exist_ok=True)
         default_stopwords = [
-            '的', '了', '是', '在', '和', '也', '都', '就', '不', '啊', '哦', '嗯', '吧', '吗', '呢', '呀',
-            '一', '二', '三', '四', '五', '六', '七', '八', '九', '十', '百', '千', '万', '亿',
+            '在', '和', '也', '都', '就', '不', '啊', '哦', '嗯', '吧', '吗', '呢', '呀',
             '我', '你', '他', '她', '它', '我们', '你们', '他们', '她们', '它们', '自己', '别人',
             '这', '那', '这些', '那些', '这个', '那个', '这么', '那么', '这样', '那样',
             '什么', '怎么', '为什么', '哪里', '哪儿', '谁', '什么时候',
@@ -99,17 +106,16 @@ def create_default_dicts():
             '有', '没有', '是', '不是', '也', '还', '都', '只', '就', '才', '又', '再',
             '很', '太', '非常', '特别', '十分', '更', '最', '比较', '稍微', '有点',
             '因为', '所以', '但是', '然而', '虽然', '尽管', '如果', '那么', '否则',
-            'a', 'an', 'the', 'and', 'or', 'but', 'so', 'if', 'then', 'else', 'for', 'with',
-            'to', 'of', 'in', 'on', 'at', 'by', 'from', 'as', 'is', 'are', 'was', 'were',
-            'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would',
-            'shall', 'should', 'can', 'could', 'may', 'might', 'must', 'this', 'that', 'these',
-            'those', 'it', 'its', 'they', 'them', 'their', 'he', 'him', 'his', 'she', 'her',
-            'we', 'us', 'our', 'you', 'your', 'i', 'me', 'my', 'mine',
-            '哈', '嘻嘻', '呵呵', '哈哈', '嘿嘿', '呜呜', '喔', '嚯', '呼', '咩',
-            '啦', '咯', '呵', '嘿', '哇', '哎', '哟', '喂', '嗯', '哦',
-            '看', '瞧', '望', '瞅', '瞄', '盯', '瞪', '瞥',
-            '说', '讲', '谈', '聊', '唠', '扯', '吹',
+            '哈', '嘻', '呵', '嘿', '哇', '哎', '哟', '喂', '嗯', '哦', '咩', '嚯', '呼', '啦', '咯',
+            '看', '瞧', '望', '瞅', '瞄', '盯', '瞪', '瞥', '讲', '谈', '聊', '唠', '扯', '吹',
             '搞', '弄', '整', '干', '做', '办', '处理',
+            '真的', '一个', '这个', '那个', '什么', '怎么', '为什么', '哪里', '哪儿', '谁', '什么时候',
+            '觉得', '感觉', '看', '说', '听', '走', '去', '来', '做', '用', '给', '让', '把', '被',
+            '有', '没有', '是', '不是', '也', '还', '都', '只', '就', '才', '又', '再',
+            '很', '太', '非常', '特别', '十分', '更', '最', '比较', '稍微', '有点',
+            '视频', '看了', '懂了', '笑了', '哭了', '刷', '打卡', '路过', '收藏', '点赞', '投币', '三连', '关注',
+            '转发', '支持',
+            '666', '233', '哈哈哈', '哈哈哈哈'
         ]
         with open(STOPWORDS_PATH, 'w', encoding='utf-8') as f:
             f.write('\n'.join(default_stopwords))
@@ -123,29 +129,45 @@ def create_default_dicts():
             f.write('\n'.join(default_user_words))
         logger.info(f"已创建用户词典: {USER_DICT_PATH}")
 
-    # 积极词
+    # 积极词（扩充汽车领域和网络用语）
     if not os.path.exists(POS_DICT_PATH):
         os.makedirs(os.path.dirname(POS_DICT_PATH), exist_ok=True)
         default_pos = [
-            '好', '棒', '赞', '优秀', '厉害', '惊艳', '完美', '喜欢', '爱', '值得', '推荐', '满意', '惊喜', '流畅', '稳定', '可靠', '省心', '划算', '超值', 'yyds', '真香',
-            '舒服', '爽', '牛逼', '给力', '酷', '帅', '漂亮', '好看', '美观', '大气', '高端', '豪华', '舒适', '安静', '平顺', '强劲', '快', '迅速', '灵敏', '精准', '智能', '科技',
-            '安全', '放心', '省油', '省钱', '经济', '环保', '先进', '创新', '独特', '新颖', '可靠', '耐用', '保值', '有面子', '有档次', '有品位', '有范儿', '拉风', '吸睛'
+            '好', '棒', '赞', '优秀', '厉害', '惊艳', '完美', '喜欢', '爱', '值得', '推荐', '满意', '惊喜',
+            '流畅', '稳定', '可靠', '省心', '划算', '超值', 'yyds', '真香', '舒服', '爽', '牛逼', '给力',
+            '酷', '帅', '漂亮', '好看', '美观', '大气', '高端', '豪华', '舒适', '安静', '平顺', '强劲',
+            '快', '迅速', '灵敏', '精准', '智能', '科技', '安全', '放心', '省油', '省钱', '经济', '环保',
+            '先进', '创新', '独特', '新颖', '可靠', '耐用', '保值', '有面子', '有档次', '有品位', '有范儿',
+            '拉风', '吸睛',
+            '丝滑', '扎实', '迅猛', '爆', '顶', '绝', '香', '种草', '安利', '惊艳', '可靠', '耐用', '省心',
+            '静谧', '稳健', '从容', '干脆', '利落', '聪明', '智慧', '贴心', '人性化', '便捷', '炫酷', '时尚',
+            '精致', '科技感', '未来感', '良心', '厚道', '雷总', '大定', '爆单', '破万', '遥遥领先',
+            '绝绝子', 'yyds', 'awsl', '芜湖', '起飞', '冲', '买爆', '真香', '上头', '爱了爱了', '666', '牛批'
         ]
         with open(POS_DICT_PATH, 'w', encoding='utf-8') as f:
             f.write('\n'.join(default_pos))
-        logger.info(f"已创建积极词表: {POS_DICT_PATH}")
+        logger.info(f"已创建积极词表（{len(default_pos)}词）: {POS_DICT_PATH}")
 
-    # 消极词
+    # 消极词（扩充汽车领域和网络用语）
     if not os.path.exists(NEG_DICT_PATH):
         os.makedirs(os.path.dirname(NEG_DICT_PATH), exist_ok=True)
         default_neg = [
-            '差', '烂', '垃圾', '失望', '后悔', '坑', '问题', '故障', '异响', '漏水', '卡顿', '慢', '贵', '不值', '劝退', '踩雷', '虚标', '缩水', '延迟', '不好', '不行', '糟糕',
-            '恶心', '烦', '蠢', '傻', '笨', '差劲', '劣质', '粗糙', '简陋', '难用', '难开', '难坐', '不舒服', '不舒适', '不安静', '噪音大', '颠簸', '顿挫', '顿挫感', '续航短',
-            '充电慢', '服务差', '售后差', '欺诈', '虚假', '夸大', '忽悠', '坑人', '骗人', '后悔', '不值', '太贵', '溢价', '加价', '提车慢', '等待久', '交付延迟'
+            '差', '烂', '垃圾', '失望', '后悔', '坑', '问题', '故障', '异响', '漏水', '卡顿', '慢', '贵',
+            '不值', '劝退', '踩雷', '虚标', '缩水', '延迟', '不好', '不行', '糟糕', '恶心', '烦', '蠢',
+            '傻', '笨', '差劲', '劣质', '粗糙', '简陋', '难用', '难开', '难坐', '不舒服', '不舒适',
+            '不安静', '噪音大', '颠簸', '顿挫', '顿挫感', '续航短', '充电慢', '服务差', '售后差', '欺诈',
+            '虚假', '夸大', '忽悠', '坑人', '骗人', '不值', '太贵', '溢价', '加价', '提车慢', '等待久',
+            '交付延迟',
+            '肉', '顿挫', '颠', '抖', '散', '虚', '异响', '漏水', '生锈', '故障', '失灵', '出问题', '趴窝',
+            '死机', '黑屏', '卡死', '智障', '不灵敏', '反应慢', '交付慢', '等车久', '售后差', '服务差',
+            '加价', '变相加价', '黄牛', '加价提车', '减配', '偷工减料', '虚标', '缩水', '续航虚', '充电慢',
+            '慢充', '充电桩少', '噪音', '风噪', '胎噪', '异响', '共振', '颠簸', '悬挂硬', '刹车软', '转向虚',
+            '指向不准', '电耗高', '费电', '掉电快', '续航焦虑', '自动驾驶垃圾', '智驾拉胯',
+            '翻车', '踩雷', '劝退', '拔草', '避坑', '辣鸡', '渣渣', '吐了', '雷', '坑爹', '智商税', '韭菜'
         ]
         with open(NEG_DICT_PATH, 'w', encoding='utf-8') as f:
             f.write('\n'.join(default_neg))
-        logger.info(f"已创建消极词表: {NEG_DICT_PATH}")
+        logger.info(f"已创建消极词表（{len(default_neg)}词）: {NEG_DICT_PATH}")
 
     # 程度副词
     if not os.path.exists(DEGREE_DICT_PATH):
@@ -197,35 +219,33 @@ class SaveData:
         add_timestamp = self.add_timestamp
 
         if result_type == "videos":
-            base_name = f"videos_{keyword}" if keyword else "videos"
+            if not keyword:
+                raise ValueError("保存 videos 时必须提供 keyword")
+            base_dir = os.path.join(RAW_DATA_DIR, "videos", keyword)
+            base_name = f"videos_{keyword}"
             parts = [base_name]
             if add_timestamp:
                 parts.append(datetime.now().strftime("%Y%m%d_%H%M%S"))
             if add_some:
                 parts.append(add_some)
             filename = "_".join(parts) + ".csv"
-            if keyword:
-                base_dir = os.path.join(RAW_DATA_DIR, keyword, "videos")
-            else:
-                base_dir = RAW_DATA_DIR
             full_path = os.path.join(base_dir, filename)
 
         elif result_type == "danmaku":
-            base_name = f"danmaku_{keyword}" if keyword else "danmaku"
+            if not keyword:
+                raise ValueError("保存 danmaku 时必须提供 keyword")
+            base_dir = os.path.join(RAW_DATA_DIR, "danmaku", keyword)
+            base_name = f"danmaku_{keyword}"
             parts = [base_name]
             if add_timestamp:
                 parts.append(datetime.now().strftime("%Y%m%d_%H%M%S"))
             if add_some:
                 parts.append(add_some)
             filename = "_".join(parts) + ".csv"
-            if keyword:
-                base_dir = os.path.join(RAW_DATA_DIR, keyword, "danmaku")
-            else:
-                base_dir = RAW_DATA_DIR
             full_path = os.path.join(base_dir, filename)
 
         elif result_type == "processed":
-            full_path = CLEANED_COMMENTS_PATH
+            full_path = COMBINED_COMMENTS_PATH
 
         elif result_type == "sales":
             full_path = SALES_DATA_PATH

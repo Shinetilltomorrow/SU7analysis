@@ -34,7 +34,6 @@ def plot_sentiment_distribution(df, save_path=None):
         config.logger.warning("数据中缺少 sentiment_label 列，无法绘制情感分布图")
         return
     counts = df['sentiment_label'].value_counts()
-    # 动态生成标签和颜色
     label_map = {'positive': '积极', 'neutral': '中性', 'negative': '消极'}
     labels = [label_map.get(k, k) for k in counts.index]
     colors = {'positive': 'green', 'neutral': 'gray', 'negative': 'red'}
@@ -47,7 +46,7 @@ def plot_sentiment_distribution(df, save_path=None):
         colors=color_list,
         autopct='%1.1f%%',
         startangle=90,
-        explode=[0.05 if i == 0 else 0 for i in range(len(counts))]   # 仅突出第一个
+        explode=[0.05 if i == 0 else 0 for i in range(len(counts))]
     )
     ax.set_title('小米SU7 B站弹幕情感分布', fontsize=14)
     plt.tight_layout()
@@ -120,21 +119,60 @@ def plot_wordcloud(text_series, save_path=None):
     try:
         from wordcloud import WordCloud
         import os
+        import matplotlib.pyplot as plt
+        import numpy as np
+
+        # 加载停用词
         stopwords = set()
         if os.path.exists(config.STOPWORDS_PATH):
             with open(config.STOPWORDS_PATH, 'r', encoding='utf-8') as f:
                 stopwords = set(line.strip() for line in f if line.strip())
+
+        # 可选：加载情感词典（用于颜色区分）
+        pos_words = set()
+        neg_words = set()
+        if os.path.exists(config.POS_DICT_PATH):
+            with open(config.POS_DICT_PATH, 'r', encoding='utf-8') as f:
+                pos_words = set(line.strip() for line in f if line.strip())
+        if os.path.exists(config.NEG_DICT_PATH):
+            with open(config.NEG_DICT_PATH, 'r', encoding='utf-8') as f:
+                neg_words = set(line.strip() for line in f if line.strip())
+
+        def color_func(word, **kwargs):
+            if word in pos_words:
+                return "#2E8B57"  # 海绿色
+            elif word in neg_words:
+                return "#CD5C5C"  # 印度红
+            else:
+                return "#4682B4"  # 钢蓝色
+
+        # 收集所有词
         all_words = []
         for txt in text_series:
             words = txt.split()
             words = [w for w in words if w not in stopwords and len(w) > 1]
             all_words.extend(words)
         text = ' '.join(all_words)
-        wc = WordCloud(width=800, height=400, background_color='white', font_path='simhei.ttf', max_words=200).generate(text)
-        fig, ax = plt.subplots(figsize=(10,6))
+
+        # 生成词云
+        wc = WordCloud(
+            width=1000,
+            height=600,
+            background_color='white',
+            font_path='simhei.ttf',
+            max_words=300,
+            min_font_size=10,
+            max_font_size=100,
+            colormap='viridis',  # 基础配色（会被 color_func 覆盖）
+            color_func=color_func,  # 自定义颜色
+            random_state=42  # 固定随机种子，保证可重复性
+        ).generate(text)
+
+        # 绘图
+        fig, ax = plt.subplots(figsize=(12, 8))
         ax.imshow(wc, interpolation='bilinear')
         ax.axis('off')
-        ax.set_title('小米SU7 B站弹幕词云图')
+        ax.set_title('小米SU7 B站弹幕词云图', fontsize=16, pad=20)
         plt.tight_layout()
         if save_path:
             plt.savefig(save_path, dpi=300, bbox_inches='tight')

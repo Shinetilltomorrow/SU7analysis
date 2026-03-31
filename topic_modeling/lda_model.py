@@ -20,7 +20,7 @@ class LDATopicModeler:
         self.doc_term_matrix = None
         self.feature_names = None
         self.stopwords = set()
-        self.keep_pos = {'n', 'v', 'a', 'an', 'vn', 'ad', 'i', 'l', 'j'}   # ad为副形词，可保留
+        self.keep_pos = {'n', 'v', 'a', 'an', 'vn', 'ad', 'i', 'l', 'j'}
         self.valid_indices = None
 
         import os

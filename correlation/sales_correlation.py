@@ -2,7 +2,7 @@
 import pandas as pd
 import numpy as np
 from scipy.stats import pearsonr, spearmanr
-from statsmodels.tsa.stattools import grangercausalitytests
+from statsmodels.tsa.stattools import grangercausalitytests, ccf
 import config
 
 
@@ -23,6 +23,7 @@ class SalesCorrelationAnalyzer:
         config.logger.info(f"情感数据: {len(self.sentiment_df)} 条，销量数据: {len(self.sales_df)} 个月")
 
     def aggregate_by_month(self):
+        self.sentiment_df = self.sentiment_df.dropna(subset=['date'])
         self.sentiment_df['date'] = pd.to_datetime(self.sentiment_df['date'])
         self.sentiment_df['month'] = self.sentiment_df['date'].dt.to_period('M')
         monthly_metrics = self.sentiment_df.groupby('month').agg({
@@ -31,7 +32,9 @@ class SalesCorrelationAnalyzer:
             'bv_id': 'count'
         }).reset_index()
         monthly_metrics.columns = ['month', 'avg_sentiment', 'sentiment_std', 'positive_ratio', 'danmaku_count']
-        negative_ratio = self.sentiment_df.groupby('month').apply(lambda x: (x['sentiment_label'] == 'negative').sum() / len(x)).reset_index()
+        negative_ratio = self.sentiment_df.groupby('month').apply(
+            lambda x: (x['sentiment_label'] == 'negative').sum() / len(x)
+        ).reset_index()
         negative_ratio.columns = ['month', 'negative_ratio']
         monthly_metrics = monthly_metrics.merge(negative_ratio, on='month')
         monthly_metrics['month'] = monthly_metrics['month'].dt.to_timestamp()
@@ -45,12 +48,22 @@ class SalesCorrelationAnalyzer:
     def correlation_analysis(self):
         corr_results = {}
         for col in ['avg_sentiment', 'positive_ratio', 'negative_ratio', 'danmaku_count']:
-            pearson_corr, pearson_p = pearsonr(self.merged_df[col], self.merged_df['sales'])
-            spearman_corr, spearman_p = spearmanr(self.merged_df[col], self.merged_df['sales'])
-            corr_results[col] = {'pearson_r': pearson_corr, 'pearson_p': pearson_p, 'spearman_r': spearman_corr, 'spearman_p': spearman_p}
+            valid = ~(self.merged_df[col].isna() | self.merged_df['sales'].isna())
+            if valid.sum() > 0:
+                pearson_corr, pearson_p = pearsonr(self.merged_df.loc[valid, col], self.merged_df.loc[valid, 'sales'])
+                spearman_corr, spearman_p = spearmanr(self.merged_df.loc[valid, col], self.merged_df.loc[valid, 'sales'])
+            else:
+                pearson_corr, pearson_p, spearman_corr, spearman_p = np.nan, np.nan, np.nan, np.nan
+            corr_results[col] = {
+                'pearson_r': pearson_corr, 'pearson_p': pearson_p,
+                'spearman_r': spearman_corr, 'spearman_p': spearman_p
+            }
         config.logger.info("\n相关性分析结果:")
         for col, stats in corr_results.items():
-            config.logger.info(f"\n{col}:\n  Pearson r = {stats['pearson_r']:.4f}, p = {stats['pearson_p']:.4f}\n  Spearman r = {stats['spearman_r']:.4f}, p = {stats['spearman_p']:.4f}")
+            config.logger.info(
+                f"\n{col}:\n  Pearson r = {stats['pearson_r']:.4f}, p = {stats['pearson_p']:.4f}\n"
+                f"  Spearman r = {stats['spearman_r']:.4f}, p = {stats['spearman_p']:.4f}"
+            )
         return corr_results
 
     def lag_analysis(self, max_lag=3):
@@ -59,31 +72,59 @@ class SalesCorrelationAnalyzer:
             lag_corrs = []
             for lag in range(1, max_lag + 1):
                 sentiment_lagged = self.merged_df[col].shift(lag)
-                valid_idx = ~(sentiment_lagged.isna() | self.merged_df['sales'].isna())
-                if valid_idx.sum() > 0:
-                    corr, p = pearsonr(sentiment_lagged[valid_idx], self.merged_df['sales'][valid_idx])
+                valid = ~(sentiment_lagged.isna() | self.merged_df['sales'].isna())
+                if valid.sum() > 0:
+                    corr, p = pearsonr(sentiment_lagged[valid], self.merged_df.loc[valid, 'sales'])
                     lag_corrs.append({'lag': lag, 'correlation': corr, 'p_value': p})
             lag_results[col] = lag_corrs
-        config.logger.info("\n滞后效应分析结果:")
+        config.logger.info("\n滞后效应分析结果（Pearson 移位相关）:")
         for col, lags in lag_results.items():
             config.logger.info(f"\n{col}:")
             for lag_info in lags:
-                config.logger.info(f"  滞后{lag_info['lag']}个月: r = {lag_info['correlation']:.4f}, p = {lag_info['p_value']:.4f}")
+                config.logger.info(
+                    f"  滞后{lag_info['lag']}个月: r = {lag_info['correlation']:.4f}, p = {lag_info['p_value']:.4f}"
+                )
         return lag_results
 
+    def cross_correlation_analysis(self, max_lag=3):
+        ccf_results = {}
+        for col in ['avg_sentiment', 'positive_ratio', 'negative_ratio']:
+            common_idx = self.merged_df[col].notna() & self.merged_df['sales'].notna()
+            s1 = self.merged_df.loc[common_idx, col].values
+            s2 = self.merged_df.loc[common_idx, 'sales'].values
+            if len(s1) < max_lag + 1:
+                config.logger.warning(f"序列长度 {len(s1)} 小于最大滞后 {max_lag}，无法计算完整 CCF")
+                continue
+            ccf_vals = ccf(s1, s2, adjusted=False)
+            lag_corrs = [
+                {'lag': lag, 'correlation': ccf_vals[lag] if lag < len(ccf_vals) else np.nan}
+                for lag in range(min(max_lag + 1, len(ccf_vals)))
+            ]
+            ccf_results[col] = lag_corrs
+
+        config.logger.info("\n交叉相关性分析（CCF）结果（情感领先销量）:")
+        for col, lags in ccf_results.items():
+            config.logger.info(f"\n{col}:")
+            for lag_info in lags:
+                config.logger.info(f"  滞后{lag_info['lag']}个月: r = {lag_info['correlation']:.4f}")
+        return ccf_results
+
     def granger_test(self, max_lag=3):
-        data = pd.DataFrame({'sales': self.merged_df['sales'], 'avg_sentiment': self.merged_df['avg_sentiment']})
-        config.logger.info("\n格兰杰因果检验 (情感 -> 销量):")
-        try:
-            if len(data) > max_lag * 2:
+        data = pd.DataFrame({
+            'sales': self.merged_df['sales'],
+            'avg_sentiment': self.merged_df['avg_sentiment']
+        }).dropna()
+        config.logger.info("\n格兰杰因果检验 (avg_sentiment -> sales):")
+        if len(data) > max_lag * 2:
+            try:
                 result = grangercausalitytests(data[['sales', 'avg_sentiment']], maxlag=max_lag, verbose=False)
                 for lag in range(1, max_lag + 1):
                     p_value = result[lag][0]['ssr_ftest'][1]
                     config.logger.info(f"  滞后{lag}个月: F检验 p值 = {p_value:.4f}")
-            else:
-                config.logger.info("  样本量不足，无法进行格兰杰因果检验")
-        except Exception as e:
-            config.logger.error(f"  检验失败: {e}")
+            except Exception as e:
+                config.logger.error(f"格兰杰检验失败: {e}")
+        else:
+            config.logger.info("  样本量不足，无法进行格兰杰因果检验")
 
     def run(self):
         self.load_data()
@@ -92,4 +133,5 @@ class SalesCorrelationAnalyzer:
         corr_results = self.correlation_analysis()
         lag_results = self.lag_analysis()
         self.granger_test()
-        return self.merged_df, corr_results, lag_results
+        ccf_results = self.cross_correlation_analysis()
+        return self.merged_df, corr_results, lag_results, ccf_results

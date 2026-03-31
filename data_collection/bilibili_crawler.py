@@ -69,6 +69,10 @@ class BilibiliCrawler:
         all_videos = []
 
         for kw in keywords_to_crawl:
+            print(f"\n{'='*60}")
+            print(f"▶ 开始采集关键词: {kw}")
+            print(f"{'='*60}")
+
             videos = await self.search_videos(kw)
             filtered = [v for v in videos if self.start_date <= v['pubdate'] <= self.end_date]
             if filtered:
@@ -82,6 +86,10 @@ class BilibiliCrawler:
                 all_videos.extend(filtered)
             else:
                 config.logger.info(f"关键词 '{kw}' 未采集到有效视频")
+
+            print(f"\n{'='*60}")
+            print(f"✔ 关键词 '{kw}' 采集完成（共 {len(filtered)} 个有效视频）")
+            print(f"{'='*60}\n")
 
         return all_videos
 
@@ -127,6 +135,11 @@ class BilibiliCrawler:
         all_danmaku = []
         semaphore = asyncio.Semaphore(5)
 
+        if keyword:
+            print(f"\n{'='*60}")
+            print(f"▶ 开始采集关键词 '{keyword}' 的弹幕")
+            print(f"{'='*60}")
+
         async def fetch_one(bvid):
             async with semaphore:
                 config.logger.info(f"获取视频 {bvid} 的弹幕...")
@@ -149,4 +162,10 @@ class BilibiliCrawler:
             add_timestamp=True,
             keyword=keyword
         ).save()
+
+        if keyword:
+            print(f"\n{'='*60}")
+            print(f"✔ 关键词 '{keyword}' 弹幕采集完成（共 {len(all_danmaku)} 条）")
+            print(f"{'='*60}\n")
+
         return all_danmaku
